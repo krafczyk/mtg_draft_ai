@@ -15,7 +15,7 @@ output_dir="$filename"
 mkdir -p "$output_dir"
 
 # Decompress and split the file into 1 million line chunks (adjust line count if needed)
-gzip -dc "$input_file" | split -l 100000 - "$output_dir/${filename}_chunk_"
+gzip -dc "$input_file" | split -b 104857600 - "$output_dir/${filename}_chunk_"
 
 # Rename chunks to have .csv extension
 for chunk in "$output_dir/${filename}_chunk_"*; do
