@@ -1,9 +1,8 @@
 import jpype
-from jpype import JImplements, JOverride
 import jpype.imports
 import os
 
-# Set environment
+# Set up JPype Environment
 os.environ['JAVA_HOME'] = "/usr/lib/jvm/java-21-openjdk"
 os.environ['DISPLAY'] = ":0.0"
 
@@ -14,12 +13,8 @@ from forge.gui import GuiBase
 from forge import Singletons
 ForgeGuiDesktopHelper = jpype.JClass("com.krafczyk.forge.ForgeGuiDesktopHelper")
 
+# Start up Gui
 GuiBase.setInterface(ForgeGuiDesktopHelper("/data0/matthew/Games/Forge/forge/forge-gui/"))
 
-from forge.localinstance.properties import ForgeConstants
-
-print(ForgeConstants.CACHE_CARD_PICS_DIR)
-print(ForgeConstants.CACHE_ICON_PICS_DIR)
-print(ForgeConstants.DEFAULT_SKINS_DIR)
-
+# Initialize Singletons
 Singletons.initializeOnce(True)
