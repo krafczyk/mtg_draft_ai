@@ -29,7 +29,7 @@
             <artifactId>forge-gui-desktop</artifactId>
             <version>...</version>
             <scope>system</scope>
-            <systemPath>/data0/matthew/Games/Forge/forge/forge-gui-desktop/target/forge-gui-desktop-2.0.01-SNAPSHOT-jar-with-dependencies.jar</systemPath>
+            <systemPath>/data0/matthew/Games/Forge/forge/forge-gui-desktop/target/forge-gui-desktop-2.0.02-SNAPSHOT-jar-with-dependencies.jar</systemPath>
         </dependency>
     </dependencies>
 </project>
