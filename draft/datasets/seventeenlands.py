@@ -16,14 +16,15 @@ def get_data_dir_dtypes(data_dir: str) -> dict:
     # Get dtypes
     return get_dtypes(filename=os.path.join(data_dir, first_file))
 
-#def get_data_dir_columns(data_dir: str) -> list:
-#    dtypes = get_data_dir_dtypes(data_dir)
-    
 
-def get_p1_data_ddf(data_dir: str) -> ddf.DataFrame:
+def get_data_ddf(data_dir: str) -> ddf.DataFrame:
     dtypes = get_data_dir_dtypes(data_dir)
     # Load the dataset
-    draft_data_ddf = ddf.read_csv(os.path.join(data_dir, "*.csv"), dtype=dtypes)
+    return ddf.read_csv(os.path.join(data_dir, "*.csv"), dtype=dtypes)
+
+
+def get_p1_data_ddf(data_dir: str) -> ddf.DataFrame:
+    draft_data_ddf = get_data_ddf(data_dir)
 
     # Get only data for pack 1 pick 1
     return draft_data_ddf[draft_data_ddf['pick_number'] == 0]

@@ -69,7 +69,7 @@ if __name__ == "__main__":
         pack_rows.append(pack)
 
     # Create and write the card data
-    pd.DataFrame(columns=card_cols).to_csv(args.output_file, index=False)
+    pd.DataFrame(pack_rows, columns=card_cols).to_csv(args.output_file, index=False)
 
     # Shut down the JVM
     jpype.shutdownGuiEnvironment()
