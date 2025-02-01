@@ -2,3 +2,8 @@ __pycache__
 *.pyc
 *.png
 *.csv
+*.csv.gz
+.ipynb_checkpoints
+.classpath
+.project
+.settings
