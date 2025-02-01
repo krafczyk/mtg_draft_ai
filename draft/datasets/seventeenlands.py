@@ -1,12 +1,8 @@
-import dask
 import dask.dataframe as ddf
 import os
 from replay_dtypes import get_dtypes
 
-def configure_dask():
-    _ = dask.config.set(scheduler='processes')
-
-def get_data_dir_dtypes(data_dir: str) -> dict:
+def get_data_dir_dtypes(data_dir: str) -> dict[str,str]:
     dir_content = os.listdir(data_dir)
     # Find all .csv files
     dir_content = [d for d in dir_content if d.endswith(".csv")]
