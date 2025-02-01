@@ -2,5 +2,7 @@
   "venvPath": "/data1/matthew/Projects/mtg_draft_ai/", 
   "venv": "mtg_venv",
   "reportMissingTypeStubs": false,
-  "reportUnknownMemberType": false
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false
 }
