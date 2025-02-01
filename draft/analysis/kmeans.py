@@ -1,9 +1,10 @@
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from numpy.typing import ArrayLike
-from typing import Callable, Any
+from typing import Callable
 import pandas as pd
 import numpy as np
+import numbers
 
 
 def find_best_kmeans_silhouette(data: ArrayLike | pd.DataFrame, k_min:int=2, k_max:int=10):
@@ -21,7 +22,11 @@ def find_best_kmeans_silhouette(data: ArrayLike | pd.DataFrame, k_min:int=2, k_m
     return best_kmeans
 
 
-def sort_kmeans_clusters(kmeans: KMeans, key: None | Callable[[np.ndarray], Any]=None, reverse:bool=True):
+def sort_kmeans_clusters(
+    kmeans: KMeans,
+    key: None | Callable[[ArrayLike], numbers.Real]=None,
+    reverse:bool=True) -> None:
+
     """
     Sorts the clusters in a fitted KMeans model based on a given criterion.
 
