@@ -1,9 +1,10 @@
 import sympy
 import numbers
 import itertools
+from sympy.functions.combinatorial.factorials import binomial
 
 
-def build_sampling_probability(slot_probabilities: list[numbers.Real | sympy.Basic], num_successes: int = 1) -> sympy.Basic:
+def slot_sampling_probability(slot_probabilities: list[numbers.Real | sympy.Basic], num_successes: int = 1) -> sympy.Basic:
     """
     Given a list of probabilities to produce a desired outcome across different slots,
     Produce a full probability a given number of successes can occur.
@@ -22,8 +23,12 @@ def build_sampling_probability(slot_probabilities: list[numbers.Real | sympy.Bas
         for j in slot_prob_Is:
             if j in I:
                 continue
-            p.append(sympy.core.Float(1)-slot_probabilities[j])
+            p.append(1-slot_probabilities[j]) # pyright: ignore[reportOperatorIssue]
         p = sympy.Mul(*p)
         P.append(p)
 
     return sympy.Add(*P)
+
+
+def binomial_probability(n: int | sympy.Basic, N: int | sympy.Basic, p: int | sympy.Basic) -> sympy.Basic:
+    return binomial(n, N)*(p**n)*((1-p)**(N-n)) # pyright: ignore[reportOperatorIssue]
