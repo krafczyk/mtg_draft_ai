@@ -1,5 +1,7 @@
 import numpy as np
-from draft.typing import RealLike
+import sympy
+from draft.typing import Real, RealLike
+from draft.utils import sympy_to_numpy
 
 
 class CardPool:
@@ -15,3 +17,20 @@ class CardPool:
 class SlotDefinition:
     def __init__(self, prob_map: dict[str, RealLike]):
         self.prob_map: dict[str, RealLike] = prob_map
+
+    def sample(self, sym_subs: None | list[tuple[sympy.Symbol,Real]] = None) -> str:
+        probs: list[np.float32] = []
+        for v in self.prob_map.values():
+            w: Real = 0.
+            if isinstance(v, sympy.Basic):
+                if sym_subs is not None:
+                    w = np.float32(sympy_to_numpy(v.subs(sym_subs)))
+            else:
+                w = v
+            probs.append(np.float32(w))
+
+        pool_id: str = np.random.choice(
+            list(
+                self.prob_map.keys()),
+            p=probs)
+        return pool_id
