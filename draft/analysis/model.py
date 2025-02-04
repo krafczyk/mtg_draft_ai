@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import ArrayLike
 import sympy
 from draft.typing import Real, RealLike
 from draft.utils import sympy_to_numpy
@@ -29,8 +30,12 @@ class SlotDefinition:
                 w = v
             probs.append(np.float32(w))
 
+        Probs: ArrayLike = np.array(probs)
+
+        if np.sum(Probs) - 1. < 1e-6:
+            Probs = Probs/np.sum(Probs)
         pool_id: str = np.random.choice(
             list(
                 self.prob_map.keys()),
-            p=probs)
+            p=Probs)
         return pool_id
