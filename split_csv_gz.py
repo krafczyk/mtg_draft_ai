@@ -5,8 +5,9 @@ import argparse
 
 def split_csv_by_size(input_file, max_chunk_size=50 * 1024 * 1024):  # Default 50 MB
     # Define output directory based on input file name (stem without .csv.gz)
+    base_dir = os.path.dirname(input_file)
     filename_stem = os.path.basename(input_file).replace('.csv.gz', '')
-    output_dir = filename_stem
+    output_dir = os.path.join(base_dir, filename_stem)
     os.makedirs(output_dir, exist_ok=True)
 
     # Open the gzip file and read the header

@@ -1,29 +1,11 @@
 #!/bin/bash
 
-# Check if input file is provided
-if [ -z "$1" ]; then
-  echo "Usage: $0 <file.csv.gz>"
-  exit 1
-fi
+dirpath=$(dirname "$0")
 
-# Input file and output directory
-input_file="$1"
-filename=$(basename "$input_file" .csv.gz)
-output_dir="$filename"
-
-# Create output directory if it doesn't exist
-mkdir -p "$output_dir"
-
-# Extract the header line
-header=$(gzip -dc "$input_file" | head -n 1)
-
-# Decompress, skip the header, and split the file into 1 MB chunks
-gzip -dc "$input_file" | tail -n +2 | split -b 104857600 - "$output_dir/${filename}_chunk_"
-
-# Rename chunks to have .csv extension
-for chunk in "$output_dir/${filename}_chunk_"*; do
-  (echo "$header" && cat "$chunk") > "${chunk}.csv"
-  rm "$chunk"
+for file in $(find . -path "*17lands_data*" -type f -name "*.csv.gz"); do
+    # Call the Python script with the set code
+    target_dir=${file%.csv.gz}
+    if [ ! -d "$target_dir" ]; then
+        python "${dirpath}/split_csv_gz.py" "$file"
+    fi
 done
-
-echo "Chunks created in directory: $output_dir with .csv extensions"
