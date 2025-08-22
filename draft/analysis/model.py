@@ -17,13 +17,11 @@ class CardPool:
         return card
 
 
-@dataclass
-class SlotDefinition:
-    prob_map: dict[str, RealLike] = field(default_factory=dict)
+class SlotDefinition(dict[str,RealLike]):
 
     def sample(self, sym_subs: None | list[tuple[sympy.Symbol,Real]] = None) -> str:
         probs: list[np.float32] = []
-        for v in self.prob_map.values():
+        for v in self.values():
             w: Real = 0.
             if isinstance(v, sympy.Basic):
                 if sym_subs is not None:
@@ -37,7 +35,7 @@ class SlotDefinition:
         if np.sum(Probs) - 1. < 1e-6:
             Probs = Probs/np.sum(Probs)
         pool_id: str = np.random.choice(
-            list(self.prob_map.keys()),
+            list(self.keys()),
             p=Probs)
         return pool_id
 
