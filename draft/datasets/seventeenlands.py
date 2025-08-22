@@ -1,3 +1,4 @@
+import pandas as pd
 import dask.dataframe as ddf
 import os
 from replay_dtypes import get_dtypes
@@ -24,3 +25,6 @@ def get_p1_data_ddf(data_dir: str) -> ddf.DataFrame:
 
     # Get only data for pack 1 pick 1
     return draft_data_ddf[draft_data_ddf['pick_number'] == 0]
+
+def get_card_df(filepath="cards.csv"):
+    return pd.read_csv(filepath)

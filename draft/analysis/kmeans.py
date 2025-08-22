@@ -37,7 +37,8 @@ def reorder_kmeans(km: KMeans,
 
 
 def compute_cluster_stats(km, X):
-    labels = km.predict(X)
+    x = X.reshape(-1,1)
+    labels = km.predict(x)
     stats = []
     for i, c in enumerate(km.cluster_centers_):
         xs = X[labels == i]
@@ -70,10 +71,10 @@ def find_best_clusters(
     for k in range(min_clusters, max_clusters+1):
         km = KMeans(
             n_clusters=k, **mdl_kwargs)
-        km.fit(X)
+        km.fit(x)
         reorder_kmeans(km)
-        labels = km.predict(X)
-        score = silhouette_score(X, labels)
+        labels = km.predict(x)
+        score = silhouette_score(x, labels)
         fit_results[k] = km
         if best_score is None:
             best_score = score
@@ -83,6 +84,6 @@ def find_best_clusters(
             best_res = fit_results[k]
 
     if return_all:
-        best_res, fit_results
+        return best_res, fit_results
     else:
-        best_res
+        return best_res
