@@ -11,6 +11,11 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>versions-maven-plugin</artifactId>
+                <version>2.17.1</version>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
@@ -22,14 +27,30 @@
         </plugins>
     </build>
 
+    <properties>
+        <forge.version>2.0.06-SNAPSHOT</forge.version>
+    </properties>
+
     <dependencies>
-        <!-- Include dependencies for the GUI Desktop Forge here -->
         <dependency>
-            <groupId>...</groupId>
+            <groupId>forge</groupId>
+            <artifactId>forge-gui</artifactId>
+            <version>${forge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>forge</groupId>
+            <artifactId>forge-core</artifactId>
+            <version>${forge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>forge</groupId>
+            <artifactId>forge-game</artifactId>
+            <version>${forge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>forge</groupId>
             <artifactId>forge-gui-desktop</artifactId>
-            <version>...</version>
-            <scope>system</scope>
-            <systemPath>/data0/matthew/Games/Forge/forge/forge-gui-desktop/target/forge-gui-desktop-2.0.02-SNAPSHOT-jar-with-dependencies.jar</systemPath>
+            <version>${forge.version}</version>
         </dependency>
     </dependencies>
 </project>
