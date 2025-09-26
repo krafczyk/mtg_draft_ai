@@ -3,6 +3,8 @@ from numpy.typing import NDArray
 from dataclasses import dataclass
 from draft.typing import RealLike
 from typing import cast
+import sympy as sp
+from draft.utils import eval_real
 
 
 class Card:
@@ -79,22 +81,11 @@ class BoosterSlot:
         i_none = next(i for i, sheet in enumerate(self.sheets) if sheet.prob is None)
         self.sheets[i_none].prob = 1 - total_prob
 
-        # Check if we can get real values out of all probabilities.
-        # We need to check that there are no undetermined expressions,
-        # or symbols
-        sampleable = True
-        for sheet in self.sheets:
-            if sheet.prob is None:
-                sampleable = False
-                break
-            try:
-                np.float32(sheet.prob)
-            except (TypeError, ValueError):
-                sampleable = False
-        if sampleable:
-            self.cumulative_probs = np.cumsum([np.float32(sheet.prob) for sheet in self.sheets], dtype=np.float32)
-        else:
-            self.cumulative_probs = None
+        try:
+            self.set_slot_probs()
+        except TypeError:
+            pass
+
 
     def is_sampleable(self) -> bool:
         if self.cumulative_probs is None:
@@ -106,6 +97,22 @@ class BoosterSlot:
         v = np.random.random()
         sheet_idx = np.searchsorted(self.cumulative_probs, v, side='right')
         return self.sheets[sheet_idx].sheet
+
+    def set_slot_probs(self, prob_dict: dict[str|sp.Symbol,RealLike]|None=None):
+        if prob_dict is None:
+            try:
+                sheet_probs = [np.float32(sheet.prob) for sheet in self.sheets]
+                self.cumulative_probs = np.cumsum(sheet_probs, dtype=np.float32)
+            except Exception as e:
+                self.cumulative_probs = None
+                raise e
+        else:
+            try:
+                sheet_probs = [eval_real(sheet.prob, prob_dict) for sheet in self.sheets]
+                self.cumulative_probs = np.cumsum(sheet_probs, dtype=np.float32)
+            except Exception as e:
+                self.cumulative_probs = None
+                raise e
 
 
 class BoosterModel:
@@ -143,3 +150,7 @@ class BoosterModel:
                     seen.add(sheet_spec.sheet.name)
                     unique_sheets.append(sheet_spec.sheet)
         return unique_sheets
+
+    def set_slot_probs(self, prob_dict: dict[str|sp.Symbol,RealLike]|None=None):
+        for slot in self.slots:
+            slot.set_slot_probs(prob_dict=prob_dict)

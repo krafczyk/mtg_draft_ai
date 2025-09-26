@@ -2,6 +2,8 @@ import dask
 import sympy
 import numpy as np
 from typing import Any, TypeVar
+import numbers
+from sympy import Symbol, sympify, N
 
 
 def configure_dask():
@@ -36,3 +38,45 @@ def is_contained(sub: list[T], main: list[T]) -> bool:
         if el not in main:
             return False
     return True
+
+
+def eval_real(expr: Any, values: dict[Any, np.float32]) -> np.float32:
+    """
+    Evaluate `expr` to a real (float) using `values` for any SymPy symbols.
+    - If `expr` is already a Python/NumPy real number, returns it as float.
+    - If `expr` is a SymPy Symbol, looks it up in `values`.
+    - If `expr` is a SymPy expression, substitutes from `values` and evaluates.
+    - Keys in `values` can be SymPy Symbols or their names (strings).
+    - Raises KeyError if required symbols are missing.
+      otherwise raises ValueError.
+    """
+    # Fast path for plain numbers
+    if isinstance(expr, numbers.Real):
+        return np.float32(expr)
+
+    # Convert to a SymPy expression
+    e = sympify(expr)
+
+    # Build a substitution map accepting both Symbol and string keys
+    subs_map = {}
+    for k, v in values.items():
+        s = k if isinstance(k, Symbol) else Symbol(str(k))
+        subs_map[s] = v
+
+    # Substitute if there are symbols; otherwise leave as-is
+    e2 = e.subs(subs_map) if e.free_symbols else e
+
+    # Check for missing symbols
+    if e2.free_symbols:
+        missing = ", ".join(sorted(s.name for s in e2.free_symbols))
+        raise KeyError(f"Missing values for symbols: {missing}")
+
+    # Numeric evaluation
+    val = N(e2)
+
+    # Handle real/complex policy
+    if val.is_real is False:
+        raise ValueError(f"Expression evaluated to non-real value: {val}")
+
+    return np.float32(val)
+
