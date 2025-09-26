@@ -2,13 +2,20 @@ import numpy as np
 from numpy.typing import NDArray
 from dataclasses import dataclass
 from draft.typing import RealLike
+from typing import cast
 
 
-@dataclass
 class Card:
     name: str
     set_code: str
     collector_number: int
+
+    def __init__(self, name:str, set_code:str|None=None, collector_number:int|None=None):
+        self.name = name
+        if set_code is None:
+            self.set_code = ""
+        if collector_number is None:
+            self.collector_number = 0
 
     def __hash__(self):
         return hash(f"{self.name}_{self.set_code}_{self.collector_number}")
@@ -22,13 +29,25 @@ class PrintSheet:
     card_idxs: NDArray[np.int32]
     card_weights: NDArray[np.float32]
 
-    def __init__(self, name, cards):
+    def __init__(self, name:str , cards:dict[str|Card,int]|list[str|Card]):
         self.name = name
-        self.cards = cards
+        # Turn cards into a dict if it's a list
+        if isinstance(cards, list):
+            cards = {
+                Card(name=card) if isinstance(card, str) else card: 1 for card in cards
+            }
+        if isinstance(cards, dict):
+            cards = {
+                Card(name=card) if isinstance(card, str) else card: count for card, count in cards.items()
+            }
+        self.cards = cast(dict[Card,int], cards)
         self.card_idxs = np.arange(len(cards), dtype=np.int32)
         self.card_weights = np.array(list(cards.values()), dtype=np.float32)
         self.card_weights = self.card_weights / np.sum(self.card_weights)
-        self.card_names = np.array([card.name for card in cards.keys()], dtype=np.str_)
+        self.card_names = np.array([card.name for card in self.cards.keys()], dtype=np.str_)
+
+    def __len__(self):
+        return len(self.cards)
 
 
 @dataclass
@@ -74,6 +93,8 @@ class BoosterSlot:
                 sampleable = False
         if sampleable:
             self.cumulative_probs = np.cumsum([np.float32(sheet.prob) for sheet in self.sheets], dtype=np.float32)
+        else:
+            self.cumulative_probs = None
 
     def is_sampleable(self) -> bool:
         if self.cumulative_probs is None:
@@ -108,7 +129,7 @@ class BoosterModel:
         unique_sheets = self.get_unique_sheets()
         all_cards = []
         for sheet in unique_sheets:
-            all_cards.extend(sheet.cards.keys())
+            all_cards.extend(list(map(lambda c: c.name, sheet.cards.keys())))
 
         all_cards.sort()
         return all_cards
