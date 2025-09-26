@@ -1,6 +1,13 @@
 from abc import ABC, abstractmethod
 import numpy as np
+from draft.booster.basic import BoosterModel
+
 
 class BoosterGenBase(ABC):
+    model: BoosterModel
+
+    def __init__(self, model: BoosterModel):
+        self.model = model
+
     @abstractmethod
     def sample(self, n_packs: int | np.int32 | np.int64=1): ...
