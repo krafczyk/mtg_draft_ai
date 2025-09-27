@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
-from draft.booster.basic import BoosterModel
+from draft.booster.booster import BoosterModel
 
 
 class BoosterGenBase(ABC):

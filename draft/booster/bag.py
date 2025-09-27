@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 from typing import TypeVar
 
-from draft.booster.basic import BoosterModel, PrintSheet
+from draft.booster.basic import PrintSheet
+from draft.booster.booster import BoosterModel
 from draft.booster.gen import BoosterGenBase 
 
 
@@ -14,9 +15,8 @@ class Bag:
         self.refill()
 
     def refill(self):
-        self.content: list[str] = self.master_sheet.copy()
         # Shuffle the bag
-        self.content = list(np.random.permutation(self.content))
+        self.content: list[str] = self.master_sheet.copy()
 
     def sample(self) -> str:
         # Randomly grab one from the bag
@@ -37,7 +37,10 @@ class BagGen1(BoosterGenBase):
         self.sheet_bags: dict[tuple[str,str],list[Bag]] = {}
         for slot in model.slots:
             for sheet_spec in slot.sheets:
-                self.sheet_bags[slot.name, sheet_spec.sheet.name] = [Bag(sheet_spec.sheet)]*num_bags
+                new_bag_list = []
+                for _ in range(num_bags):
+                    new_bag_list.append(Bag(sheet_spec.sheet))
+                self.sheet_bags[slot.name, sheet_spec.sheet.name] = new_bag_list
 
     def sample(self, n_packs: int | np.int32 | np.int64=1) -> pd.DataFrame:
         super().sample(n_packs)
@@ -45,12 +48,16 @@ class BagGen1(BoosterGenBase):
         pack_data = np.zeros((n_packs, len(self.cards)), dtype=np.uint8)
         packs_sampled = 0
         while packs_sampled < n_packs:
+            card_list = []
             for slot in self.model.slots:
                 sheet = slot.sample_sheet()
                 bag_i = np.random.choice(np.arange(self.num_bags))
                 card_name = self.sheet_bags[slot.name, sheet.name][bag_i].sample()
-                if np.random.random() < self.skip:
-                    continue
+                card_list.append(card_name)
+
+            if np.random.random() < self.skip:
+                continue
+            for card_name in card_list:
                 card_idx = self.cards.index(card_name)
                 pack_data[packs_sampled,card_idx] += 1
             packs_sampled += 1

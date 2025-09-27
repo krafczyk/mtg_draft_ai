@@ -51,6 +51,14 @@ class PrintSheet:
     def __len__(self):
         return len(self.cards)
 
+    def sub_sheets(self) -> dict[float,list[str]]:
+        unique_counts = set(self.cards.values())
+        total_counts = sum(unique_counts)
+        subsheet_dict = {}
+        for count in unique_counts:
+            subsheet_dict[count/total_counts] = [card.name for card, c in self.cards.items() if c == count]
+        return subsheet_dict
+
 
 @dataclass
 class SheetSpec:
@@ -113,44 +121,3 @@ class BoosterSlot:
             except Exception as e:
                 self.cumulative_probs = None
                 raise e
-
-
-class BoosterModel:
-    slots: list[BoosterSlot]
-
-    def __init__(self, slots: list[BoosterSlot]):
-        self.slots = slots
-        # Check that all sheets are mutually exclusive
-        unique_sheets = self.get_unique_sheets()
-        for i in range(len(unique_sheets)):
-            for j in range(i + 1, len(unique_sheets)):
-                sheet_i = unique_sheets[i]
-                sheet_j = unique_sheets[j]
-                names_i = set(sheet_i.cards.keys())
-                names_j = set(sheet_j.cards.keys())
-                intersection = names_i.intersection(names_j)
-                if intersection:
-                    raise ValueError(f"Sheets {sheet_i.name} and {sheet_j.name} share the following cards: {intersection}")
-
-    def get_card_name_list(self) -> list[str]:
-        unique_sheets = self.get_unique_sheets()
-        all_cards = []
-        for sheet in unique_sheets:
-            all_cards.extend(list(map(lambda c: c.name, sheet.cards.keys())))
-
-        all_cards.sort()
-        return all_cards
-
-    def get_unique_sheets(self) -> list[PrintSheet]:
-        seen = set()
-        unique_sheets = []
-        for slot in self.slots:
-            for sheet_spec in slot.sheets:
-                if sheet_spec.sheet.name not in seen:
-                    seen.add(sheet_spec.sheet.name)
-                    unique_sheets.append(sheet_spec.sheet)
-        return unique_sheets
-
-    def set_slot_probs(self, prob_dict: dict[str|sp.Symbol,RealLike]|None=None):
-        for slot in self.slots:
-            slot.set_slot_probs(prob_dict=prob_dict)
