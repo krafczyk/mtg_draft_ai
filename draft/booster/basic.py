@@ -31,20 +31,32 @@ class PrintSheet:
     card_idxs: NDArray[np.int32]
     card_weights: NDArray[np.float32]
 
-    def __init__(self, name:str , cards:dict[str|Card,int]|list[str|Card]):
+    def __init__(self, name:str , cards:dict[str|Card,int]|list[str|Card]|dict[int,list[str|Card]]):
         self.name = name
         # Turn cards into a dict if it's a list
+        cards_temp: dict[Card,int] = {}
         if isinstance(cards, list):
-            cards = {
+            cards_temp = {
                 Card(name=card) if isinstance(card, str) else card: 1 for card in cards
             }
         if isinstance(cards, dict):
-            cards = {
-                Card(name=card) if isinstance(card, str) else card: count for card, count in cards.items()
-            }
-        self.cards = cast(dict[Card,int], cards)
-        self.card_idxs = np.arange(len(cards), dtype=np.int32)
-        self.card_weights = np.array(list(cards.values()), dtype=np.float32)
+            cards_temp = {}
+            for key, value in cards.items():
+                if isinstance(key, int):
+                    for card in value:
+                        if isinstance(card, str):
+                            cards_temp[Card(name=card)] = key
+                        else:
+                            cards_temp[card] = key
+                elif isinstance(key, str):
+                    cards_temp[Card(name=key)] = value
+                elif isinstance(key, Card):
+                    cards_temp[key] = value
+                else:
+                    raise ValueError(f"Invalid card key type: {type(key)}")
+        self.cards = cast(dict[Card,int], cards_temp)
+        self.card_idxs = np.arange(len(self.cards), dtype=np.int32)
+        self.card_weights = np.array(list(self.cards.values()), dtype=np.float32)
         self.card_weights = self.card_weights / np.sum(self.card_weights)
         self.card_names = np.array([card.name for card in self.cards.keys()], dtype=np.str_)
 
@@ -81,19 +93,20 @@ class BoosterSlot:
                 self.sheets.append(sheet)
         n_none = sum(1 for sheet in self.sheets if sheet.prob is None)
 
-        if n_none == 0:
-            raise ValueError("At least one sheet must have unspecified probability")
         if n_none > 1:
             raise ValueError("At most one sheet can have unspecified probability")
-        total_prob = sum(sheet.prob for sheet in self.sheets if sheet.prob is not None)
-        i_none = next(i for i, sheet in enumerate(self.sheets) if sheet.prob is None)
-        self.sheets[i_none].prob = 1 - total_prob
+        if n_none == 1:
+            total_prob = sum(sheet.prob for sheet in self.sheets if sheet.prob is not None)
+            i_none = next(i for i, sheet in enumerate(self.sheets) if sheet.prob is None)
+            self.sheets[i_none].prob = 1 - total_prob
 
         try:
             self.set_slot_probs()
         except TypeError:
             pass
 
+    def sum_probs(self):
+        return sum(sheet.prob for sheet in self.sheets)
 
     def is_sampleable(self) -> bool:
         if self.cumulative_probs is None:
