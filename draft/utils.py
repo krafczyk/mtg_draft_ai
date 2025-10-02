@@ -1,6 +1,7 @@
 import dask
 import sympy
 import numpy as np
+import pandas as pd
 from typing import Any, TypeVar
 import numbers
 from sympy import Symbol, sympify, N
@@ -80,3 +81,16 @@ def eval_real(expr: Any, values: dict[Any, np.float32]) -> np.float32:
 
     return np.float32(val)
 
+
+def sort_card_df(df: pd.DataFrame,
+               name_col='name',
+               expansion_col='expansion',
+               priority=('MKM', 'OTP', 'SPG')) -> pd.DataFrame:
+    # Build categories: priority first, then the rest in lexicographic order
+    present = pd.Index(df[expansion_col].dropna().unique())
+    cats = list(priority) + sorted(x for x in present if x not in priority)
+
+    exp_type = pd.CategoricalDtype(categories=cats, ordered=True)
+    out = df.copy()
+    out[expansion_col] = out[expansion_col].astype(exp_type)
+    return out.sort_values([name_col, expansion_col], kind="mergesort")
