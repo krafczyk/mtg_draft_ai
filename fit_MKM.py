@@ -57,7 +57,6 @@ def main():
         k: v
         for k, v in Ks.items()})
     Ks = Ks.value_counts()
-    ic(Ks)
 
     print_sheets = {
         'c': PrintSheet('c', {1: card_sets['c']}),

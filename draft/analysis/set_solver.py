@@ -224,7 +224,7 @@ def fit_v1_nll_jax(Ks, sheet_keys, slots, booster_spec):
                    method="L-BFGS-B",
                    jac=True)
 
-    print(f"Fit results:")
+    print(f"Fit status:")
     print(res)
 
     x_fit = res.x
@@ -402,7 +402,7 @@ def fit_v2_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
                    method="L-BFGS-B",
                    jac=True)
 
-    print(f"Fit results:")
+    print(f"Fit status:")
     print(res)
 
     x_fit = res.x
@@ -444,7 +444,7 @@ def fit_v2_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
 
 
 # Maybe v3??
-def fit_v3_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
+def fit_v4_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
     # Use SymPy to build NLL expression, then Jax for everything else
     # Doesn't converge
 
