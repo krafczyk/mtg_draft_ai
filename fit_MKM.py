@@ -2,7 +2,7 @@ from draft.datasets.seventeenlands import get_pack_data_summary_dense, get_card_
 from draft.datasets.ops import attach_card_metadata
 from draft.booster.basic import PrintSheet, BoosterSlot
 from draft.booster.booster import BoosterModel
-from draft.analysis.set_solver import fit_v1_nll_jax
+from draft.analysis.set_solver import fit_v1_nll_jax, fit_v2_nll_sympy_jax
 import pandas as pd
 import numpy as np
 import sympy as sp
@@ -13,6 +13,7 @@ import jax.numpy as jnp
 import jax.lax as lax
 import jax.nn as jnn
 import jax
+from pprint import pprint
 idx = pd.IndexSlice
 
 
@@ -84,12 +85,15 @@ def main():
         'rm', 'w1', 'w2'
     ]
 
-    #fit_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
+    # cpu_device = jax.devices('cpu')[0]
+    # with jax.default_device(cpu_device):
+    #     result = fit_v1_nll_jax(Ks, sheet_keys, slots, booster_spec)
+    #     ic(result)
 
-    cpu_device = jax.devices('cpu')[0]
-    with jax.default_device(cpu_device):
-        result = fit_v1_nll_jax(Ks, sheet_keys, slots, booster_spec)
-        ic(result)
+    result = fit_v2_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
+
+    print("Parameter Fit Results:")
+    pprint(result)
 
 
 if __name__ == "__main__":
