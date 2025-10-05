@@ -395,10 +395,10 @@ def fit_v2_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
         return float(f), np.asarray(g)
 
     # Warm-up compile (optional, avoids first-call compile during minimize)
-    _ = scipy_obj(np.asarray(x0, dtype=np.float64))
+    _ = scipy_obj(np.asarray(x0, dtype=np.float32))
 
     res = minimize(scipy_obj,
-                   x0=np.asarray(x0, dtype=np.float64),
+                   x0=np.asarray(x0, dtype=np.float32),
                    method="L-BFGS-B",
                    jac=True)
 
@@ -476,13 +476,19 @@ def fit_v3_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
     # Create slot prob expressions
     slot_probs = {}
     prob_vector = []
+    logit_vector = []
+
     for slot_key, slot_sheets in slots.items():
         if len(slot_sheets) == 1:
             slot_probs[slot_key] = {slot_sheets[0]: 1.}
         else:
             slot_probs[slot_key] = {}
+            group_p = []
+            group_l = []
             for sheet in slot_sheets:
                 p = sp.Symbol(f"p_{slot_key}_{sheet}", real=True, positive=True)
+                group_p.append(p)
+                group_l.append(sp.Symbol(f"l_{slot_key}_{sheet}", real=True))
                 prob_vector.append(p)
                 slot_probs[slot_key][sheet] = p
 
@@ -621,9 +627,170 @@ def fit_v3_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
 
     return result
 
-
-# Maybe v4??
 def fit_v4_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
+    # Validate booster_spec
+    slot_ids = set(slots.keys())
+    for slot in booster_spec:
+        if slot not in slot_ids:
+            raise ValueError(f"Booster spec contains slot '{slot}' not found in slots: {slot_ids}")
+
+    # Validate slots
+    for slot_name, slot_sheets in slots.items():
+        for sheet in slot_sheets:
+            if sheet not in sheet_keys:
+                raise ValueError(f"Slot '{slot_name}' contains sheet '{sheet}' not found in sheets: {list(sheet_keys.keys())}")
+
+    # Validate Ks
+    if set(Ks.index.names) != set(sheet_keys):
+        raise ValueError(f"Ks index names {Ks.index.names} do not match sheets {sheet_keys}")
+
+    L = len(booster_spec)
+    S = len(sheet_keys)
+    N = len(Ks)
+
+    # Extract numpy arrays from Ks and validate their shapes
+    K_np = Ks.index.to_frame(index=False).to_numpy(dtype=np.int32)
+    N_np = Ks.to_numpy(dtype=np.float32)
+    assert K_np.shape == (N, S), f"Expected K shape {(N,S)}, got {K_np.shape}"
+    assert N_np.shape == (N,), f"Expected N shape {(N,)}, got {N_np.shape}"
+
+    # Create z variable for each sheet
+    z_vars = {sheet: sp.Symbol(f"z_{sheet}", real=True, positive=True) for sheet in sheet_keys}
+
+    # Create slot prob expressions
+    slot_probs = {}
+    prob_vector = []
+    logit_vector = []
+    prob_logit_vector = []
+    softmax_slice_starts = []
+    softmax_slice_sizes = []
+    num_pars = 0
+    for slot_key, slot_sheets in slots.items():
+        if len(slot_sheets) == 1:
+            slot_probs[slot_key] = {slot_sheets[0]: 1}
+        else:
+            slot_probs[slot_key] = {}
+            logit_group = []
+            prob_group = []
+            softmax_slice_starts.append(num_pars)
+            softmax_slice_sizes.append(len(slot_sheets))
+            num_pars += len(slot_sheets)
+            for sheet in slot_sheets:
+                p = sp.Symbol(f"p_{slot_key}_{sheet}", real=True, positive=True)
+                l = sp.Symbol(f"l_{slot_key}_{sheet}", real=True)
+                prob_vector.append(p)
+                logit_vector.append(l)
+                prob_group.append(p)
+                logit_group.append(l)
+                slot_probs[slot_key][sheet] = p
+            denom = sp.Add(*[sp.exp(l_i) for l_i in logit_group])
+            for p_i, l_i in zip(prob_group, logit_group):
+                prob_logit_vector.append(sp.exp(l_i)/denom)
+
+    softmax_slice_starts = tuple(softmax_slice_starts)
+    softmax_slice_sizes = tuple(softmax_slice_sizes)
+
+    # Precompute scatter indices for prob placement, and place needed 1.s
+    invert_slot_key = []
+    invert_sheet_key = []
+    slot_i = 0
+    for i, slot_key in enumerate(booster_spec):
+        slot_sheets = slots[slot_key]
+        if len(slot_sheets) > 1:
+            for sheet_key in slot_sheets:
+                j = sheet_keys.index(sheet_key)
+                invert_slot_key.append(slot_key)
+                invert_sheet_key.append(sheet_key)
+                slot_i += 1
+
+    # Build PGF
+    g = sp.prod([
+        sum([
+            slot_probs[slot_key].get(sheet,0.) * z_vars[sheet]
+            for sheet in slot_probs[slot_key]
+        ])
+        for slot_key in booster_spec
+    ])
+
+    gz = g.expand()
+
+    P_terms = []
+    for k in K_np:
+        z = sp.prod([z_vars[sheet]**ki for sheet, ki in zip(sheet_keys, k)])
+        P_terms.append(gz.coeff(z))
+
+    # Build negative log-likelihood
+    log_likelihood_terms = []
+    for P, n in zip(P_terms, N_np):
+        log_likelihood_terms.append(n*sp.log(P))
+    log_likelihood = sp.Add(*log_likelihood_terms)
+
+    nll_p_sp = -log_likelihood
+    assert len(nll_p_sp.free_symbols.difference(set(prob_vector))) == 0
+
+    J_pl = sp.Matrix(prob_logit_vector).jacobian(logit_vector).subs({pl: p for pl, p in zip(prob_logit_vector, prob_vector)})
+
+    J_nll_p = sp.Matrix([nll_p_sp]).jacobian(prob_vector)
+
+    jac_p = J_nll_p @ J_pl
+
+    nll_p_jax = sp.lambdify(prob_vector, nll_p_sp, cse=True, modules="jax")
+    jac_p_jax = sp.lambdify(prob_vector, jac_p, cse=True, modules="jax")
+    hess_p = jac_p.jacobian(prob_vector)
+    hess_p_jax = sp.lambdify(prob_vector, hess_p, cse=True, modules="jax")
+
+    # Define jax methods
+    @jax.jit
+    def logits_to_probs(x):
+        return jnp.concatenate([
+            jnn.softmax(lax.dynamic_slice(x, (start,), (size,)))
+            for start, size in zip(softmax_slice_starts, softmax_slice_sizes)
+        ], axis=0)
+
+    @jax.jit
+    def nll_l_val_grad_fn(x):
+        p = logits_to_probs(x)
+        #return nll_p_jax(*logits_to_probs(x)), jac_nll_l_fn(x)
+        return nll_p_jax(*p), jac_p_jax(*p)
+
+    x0 = np.random.random(size=(num_pars,))
+
+    def scipy_obj(x_np):
+        x = jnp.asarray(x_np)
+        f, g = nll_l_val_grad_fn(x)
+        return np.float64(f), np.asarray(g)
+
+    _ = scipy_obj(np.asarray(x0, dtype=np.float64))
+
+    res = minimize(scipy_obj, x0=np.asarray(x0, dtype=np.float64), method="L-BFGS-B", jac=True)
+    p_fit = logits_to_probs(res.x)
+
+    H = np.array(hess_p_jax(*logits_to_probs(res.x)))
+
+    # 2) Invert hessian to get covariance of logits
+    try:
+        cov_p = np.linalg.inv(H)
+    except np.linalg.LinAlgError:
+        cov_p = np.linalg.pinv(H) # common if using full softmax blocks
+
+    # guard tiny negative due to numerics
+    var_p = np.clip(np.diag(cov_p), 0.0, None)
+    se_p = np.sqrt(var_p)
+
+    z = 1.96
+
+    # map vector back to slot/sheet dict
+    result = {}
+    for i, (slot_key, sheet_key) in enumerate(zip(invert_slot_key, invert_sheet_key)):
+        if slot_key not in result:
+            result[slot_key] = {}
+        result[slot_key][sheet_key] = (
+            np.float32(p_fit[i]), np.float32(z*se_p[i]))
+
+    return result
+
+# Maybe v5??
+def fit_v5_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
     # Use SymPy to build NLL expression, then Jax for everything else
     # Doesn't converge
 

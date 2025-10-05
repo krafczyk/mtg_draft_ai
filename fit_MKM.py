@@ -2,7 +2,7 @@ from draft.datasets.seventeenlands import get_pack_data_summary_dense, get_card_
 from draft.datasets.ops import attach_card_metadata
 from draft.booster.basic import PrintSheet, BoosterSlot
 from draft.booster.booster import BoosterModel
-from draft.analysis.set_solver import fit_v1_nll_jax, fit_v2_nll_sympy_jax, fit_v3_nll_sympy_jax
+from draft.analysis.set_solver import fit_v1_nll_jax, fit_v2_nll_sympy_jax, fit_v3_nll_sympy_jax, fit_v4_nll_sympy_jax
 import pandas as pd
 import numpy as np
 import sympy as sp
@@ -91,7 +91,7 @@ def main():
 
     # result = fit_v2_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
 
-    result = fit_v3_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
+    result = fit_v4_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
 
     print("Parameter Fit Results:")
     pprint(result)
