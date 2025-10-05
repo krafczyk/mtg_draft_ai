@@ -790,7 +790,7 @@ def fit_v4_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec):
 
     return result
 
-def fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec):
+def fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec, dtype=np.float32, tol=None):
     # Validate booster_spec
     slot_ids = set(slots.keys())
     for slot in booster_spec:
@@ -813,7 +813,7 @@ def fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec):
 
     # Extract numpy arrays from Ks and validate their shapes
     K_np = Ks.index.to_frame(index=False).to_numpy(dtype=np.int32)
-    N_np = Ks.to_numpy(dtype=np.float32)
+    N_np = Ks.to_numpy(dtype=dtype)
     assert K_np.shape == (N, S), f"Expected K shape {(N,S)}, got {K_np.shape}"
     assert N_np.shape == (N,), f"Expected N shape {(N,)}, got {N_np.shape}"
 
@@ -913,16 +913,17 @@ def fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec):
         p = logits_to_probs(x)
         return nll_p_np(*p), jac_p_np(*p)
 
-    x0 = np.random.random(size=(num_pars,))
+    x0 = np.asarray(np.random.random(size=(num_pars,)), dtype=dtype)
 
     def scipy_obj(x_np):
-        x = jnp.asarray(x_np)
-        f, g = nll_l_val_grad_fn(x)
-        return np.float64(f), np.asarray(g)
+        f, g = nll_l_val_grad_fn(x_np)
+        return dtype(f), np.asarray(g)
 
-    _ = scipy_obj(np.asarray(x0, dtype=np.float64))
+    _ = scipy_obj(x0)
 
-    res = minimize(scipy_obj, x0=np.asarray(x0, dtype=np.float64), method="L-BFGS-B", jac=True)
+    res = minimize(scipy_obj, x0=x0, method="L-BFGS-B", jac=True)
+    print(f"Fit status:")
+    print(res)
     p_fit = logits_to_probs(res.x)
 
     H = np.array(hess_p_np(*logits_to_probs(res.x)))
@@ -945,6 +946,6 @@ def fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec):
         if slot_key not in result:
             result[slot_key] = {}
         result[slot_key][sheet_key] = (
-            np.float32(p_fit[i]), np.float32(z*se_p[i]))
+            p_fit[i], z*se_p[i])
 
     return result

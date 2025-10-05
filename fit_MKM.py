@@ -52,7 +52,7 @@ def main():
     print([(f"{k}: {len(v)}") for k,v in card_sets.items()])
 
     # Build category counts Ks for each sheet.
-    Ks = {k: MKM_df.loc[:,v].sum(axis=1) for k,v in card_sets.items()}
+    Ks = {k: MKM_df.loc[:len(MKM_df)/10,v].sum(axis=1) for k,v in card_sets.items()}
     Ks = pd.DataFrame({
         k: v
         for k, v in Ks.items()})
@@ -86,12 +86,13 @@ def main():
 
     # cpu_device = jax.devices('cpu')[0]
     # with jax.default_device(cpu_device):
-    #     result = fit_v1_nll_jax(Ks, sheet_keys, slots, booster_spec)
+    #     result = set_solver.fit_v1_nll_jax(Ks, sheet_keys, slots, booster_spec)
     #     ic(result)
 
-    # result = fit_v2_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
+    # result = set_solver.fit_v2_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
 
-    # result = fit_v4_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
+    # result = set_solver.fit_v4_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
+
     result = set_solver.fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec)
 
     print("Parameter Fit Results:")
