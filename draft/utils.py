@@ -5,6 +5,8 @@ import pandas as pd
 from typing import Any, TypeVar
 import numbers
 from sympy import Symbol, sympify, N
+import numpy as np
+from collections.abc import Mapping, Sequence
 
 
 def configure_dask():
@@ -94,3 +96,40 @@ def sort_card_df(df: pd.DataFrame,
     out = df.copy()
     out[expansion_col] = out[expansion_col].astype(exp_type)
     return out.sort_values([name_col, expansion_col], kind="mergesort")
+
+
+def sp_evaluate(obj, subs=None, dps=None, chop=False, evalf=True):
+    """
+    Recursively evaluate SymPy objects inside nested containers.
+
+    - subs: dict of substitutions (Symbols -> values/expressions)
+    - dps:  precision for evalf/N (e.g., 50)
+    - chop: zero out tiny residuals
+    - evalf: if False, only apply .subs()
+    """
+    subs = subs or {}
+
+    def _is_container(x):
+        return isinstance(x, (Mapping, Sequence, set, np.ndarray)) and not isinstance(x, (str, bytes))
+
+    def _eval_atom(x):
+        # Anything with .subs/.evalf (Expr, Matrix, Indexed, etc.)
+        if hasattr(x, "subs") and hasattr(x, "evalf"):
+            y = x.subs(subs) if subs else x
+            return (y.evalf(n=dps, chop=chop) if evalf else y)
+        return x  # plain Python number, string, etc.
+
+    def _eval(x):
+        if isinstance(x, Mapping):
+            return type(x)({ _eval(k): _eval(v) for k, v in x.items() })
+        if isinstance(x, tuple) and hasattr(x, "_fields"):  # namedtuple
+            return type(x)(*(_eval(v) for v in x))
+        if isinstance(x, (list, tuple)):
+            return type(x)(_eval(v) for v in x)
+        if isinstance(x, set):
+            return { _eval(v) for v in x }
+        if isinstance(x, np.ndarray):
+            return np.vectorize(_eval, otypes=[object])(x)
+        return _eval_atom(x)
+
+    return _eval(obj)
