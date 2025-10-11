@@ -2,6 +2,7 @@ from draft.datasets.seventeenlands import get_pack_data_summary_dense, get_card_
 from draft.datasets.ops import attach_card_metadata
 from draft.booster.basic import PrintSheet, BoosterSlot
 from draft.booster.booster import BoosterModel
+from draft.utils import sp_evaluate
 import pandas as pd
 import numpy as np
 import sympy as sp
@@ -949,3 +950,195 @@ def fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec, dtype=np.float32
             p_fit[i], z*se_p[i])
 
     return result
+
+def fit_v6_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec, known_p=None, dtype=np.float32, tol=None):
+    # Validate booster_spec
+    slot_ids = set(slots.keys())
+    for slot in booster_spec:
+        if slot not in slot_ids:
+            raise ValueError(f"Booster spec contains slot '{slot}' not found in slots: {slot_ids}")
+
+    # Validate slots
+    for slot_name, slot_sheets in slots.items():
+        for sheet in slot_sheets:
+            if sheet not in sheet_keys:
+                raise ValueError(f"Slot '{slot_name}' contains sheet '{sheet}' not found in sheets: {list(sheet_keys.keys())}")
+
+    # Validate Ks
+    if set(Ks.index.names) != set(sheet_keys):
+        raise ValueError(f"Ks index names {Ks.index.names} do not match sheets {sheet_keys}")
+
+    if known_p is None:
+        known_p = {}
+
+    L = len(booster_spec)
+    S = len(sheet_keys)
+    N = len(Ks)
+
+    # Extract numpy arrays from Ks and validate their shapes
+    K_np = Ks.index.to_frame(index=False).to_numpy(dtype=np.int32)
+    N_np = Ks.to_numpy(dtype=dtype)
+    assert K_np.shape == (N, S), f"Expected K shape {(N,S)}, got {K_np.shape}"
+    assert N_np.shape == (N,), f"Expected N shape {(N,)}, got {N_np.shape}"
+
+    # Create z variable for each sheet
+    z_vars = {sheet: sp.Symbol(f"z_{sheet}", real=True, positive=True) for sheet in sheet_keys}
+
+    # Create slot prob expressions
+    slot_probs = {}
+    x_vector = []
+    e_vector = []
+    l_vector = []
+    xl_vector = []
+    softmax_slice_starts = []
+    softmax_slice_sizes = []
+    num_pars = 0
+    for slot_key, slot_sheets in slots.items():
+        if len(slot_sheets) == 1:
+            slot_probs[slot_key] = {slot_sheets[0]: (1, 0)}
+            continue
+
+        slot_probs[slot_key] = {}
+        # We already know these probabilities
+        if slot_key in known_p and len(slot_sheets) == len(known_p[slot_key]):
+            # Check that known_p sums to 1
+            assert abs(sum(known_p[slot_key].values()) - 1) < 1e-8, f"Known probabilities for slot '{slot_key}' do not sum to 1"
+            for sheet in slot_sheets:
+                p = known_p[slot_key][sheet]
+                slot_probs[slot_key][sheet] = (p,0)
+            continue
+        elif slot_key in known_p and len(slot_sheets) == len(known_p[slot_key])+1:
+            # Find/Solve remaining p
+            rem_sheet = set(slot_sheets).difference(set(known_p[slot_key].keys()))
+            assert len(rem_sheet) == 1, f"Slot '{slot_key}' has more than one unknown probability"
+            known_p[slot_key][rem_sheet.pop()] = 1 - sum(known_p[slot_key].values())
+            for sheet in slot_sheets:
+                p = known_p[slot_key][sheet]
+                slot_probs[slot_key][sheet] = (p,0)
+            continue
+
+        l_group = []
+        x_group = []
+
+        known_probs = []
+        known_sheets = []
+        if slot_key in known_p:
+            known_probs = list(known_p[slot_key].values())
+            known_sheets = list(known_p[slot_key].keys())
+        logit_norm = 1 - sum(known_probs)
+
+        num_pars_sheet = 0
+        for sheet in slot_sheets:
+            if sheet in known_sheets:
+                slot_probs[slot_key][sheet] = (known_p[slot_key][sheet], 0)
+                continue
+
+            x = sp.Symbol(f"x_{slot_key}_{sheet}", real=True, positive=True)
+            e = sp.Symbol(f"e_{slot_key}_{sheet}", real=True, positive=True)
+            l = sp.Symbol(f"l_{slot_key}_{sheet}", real=True)
+            x_group.append(x)
+            l_group.append(l)
+            x_vector.append(x)
+            l_vector.append(l)
+            e_vector.append(e)
+            slot_probs[slot_key][sheet] = (x*logit_norm, e*logit_norm)
+            num_pars_sheet += 1
+        denom = sp.Add(*[sp.exp(l_i) for l_i in l_group])
+        for l_i in l_group:
+            xl_vector.append(sp.exp(l_i)/denom)
+        softmax_slice_starts.append(num_pars)
+        softmax_slice_sizes.append(num_pars_sheet)
+        num_pars += num_pars_sheet
+
+    softmax_slice_starts = tuple(softmax_slice_starts)
+    softmax_slice_sizes = tuple(softmax_slice_sizes)
+
+    # Build PGF
+    g = sp.prod([
+        sum([
+            slot_probs[slot_key].get(sheet,0.)[0] * z_vars[sheet]
+            for sheet in slot_probs[slot_key]
+        ])
+        for slot_key in booster_spec
+    ])
+
+    gz = g.expand()
+
+    P_terms = []
+    for k in K_np:
+        z = sp.prod([z_vars[sheet]**ki for sheet, ki in zip(sheet_keys, k)])
+        P_terms.append(gz.coeff(z))
+
+    # Build negative log-likelihood
+    log_likelihood_terms = []
+    for P, n in zip(P_terms, N_np):
+        log_likelihood_terms.append(n*sp.log(P))
+    log_likelihood = sp.Add(*log_likelihood_terms)
+
+    nll_sp = -log_likelihood
+    assert len(nll_sp.free_symbols.difference(set(x_vector))) == 0
+    # Apply simplification works well here
+    expanded = sp.expand_log(nll_sp)
+    logs = sorted(expanded.atoms(), key=str)
+    nll_sp = sp.collect(expanded, logs)
+
+    # Build p(l) transform jacobian
+    J_xl = sp.Matrix(xl_vector).jacobian(l_vector)
+    # Use dummy to help SymPy keep things straight
+
+    J_xl = J_xl.subs({xl: x for xl, x in zip(xl_vector, x_vector)})
+
+    unexpected = J_xl.free_symbols.difference(set(x_vector))
+    assert len(unexpected) == 0, f"J_xl has unexpected free symbols: {unexpected}"
+
+    J_nll = sp.Matrix([nll_sp]).jacobian(x_vector)
+
+    jac_x = J_nll @ J_xl
+
+    nll_np = sp.lambdify(x_vector, nll_sp, cse=True, modules="numpy")
+    jac_np = sp.lambdify(x_vector, jac_x, cse=True, modules="numpy")
+    hess_x = jac_x.jacobian(x_vector)
+    hess_x_np = sp.lambdify(x_vector, hess_x, cse=True, modules="numpy")
+
+    # Define numpy methods
+    def logits_to_x(l):
+        return np.concatenate([
+            np_softmax(l[start:start+size])
+            for start, size in zip(softmax_slice_starts, softmax_slice_sizes)
+        ], axis=0)
+
+    def nll_l_val_grad_fn(l):
+        x = logits_to_x(l)
+        return nll_np(*x), jac_np(*x)
+
+    x0 = np.asarray(np.random.random(size=(num_pars,)), dtype=dtype)
+
+    def scipy_obj(x_np):
+        f, g = nll_l_val_grad_fn(x_np)
+        return dtype(f), np.asarray(g)
+
+    _ = scipy_obj(x0)
+
+    res = minimize(scipy_obj, x0=x0, method="L-BFGS-B", jac=True)
+    print(f"Fit status:")
+    print(res)
+    x_fit = logits_to_x(res.x)
+
+    H = np.array(hess_x_np(*logits_to_x(res.x)))
+
+    # 2) Invert hessian to get covariance of logits
+    try:
+        cov_x = np.linalg.inv(H)
+    except np.linalg.LinAlgError:
+        cov_x = np.linalg.pinv(H) # common if using full softmax blocks
+
+    # guard tiny negative due to numerics
+    var_x = np.clip(np.diag(cov_x), 0.0, None)
+    se_x = np.sqrt(var_x)
+
+    z = 1.96
+
+    answer_subs = {x: xf for x, xf in zip(x_vector, x_fit)} \
+        | { e: z*se for e, se in zip(e_vector, se_x) }
+
+    return sp_evaluate(slot_probs, subs=answer_subs)

@@ -77,6 +77,12 @@ def main():
         'w1': ('c', 'u', 'r1', 'r2', 'm'),
         'w2': ('c', 'u', 'r1', 'r2', 'm') }
 
+    known_p = {
+        'cg': {'rem': sp.Rational(1, 8)},
+        'rm': {'m': sp.Rational(1, 7)},
+        'w1': {'r2': sp.Rational(1, 6)},
+    }
+
     booster_spec = [
         'c', 'c', 'c', 'c', 'c', 'c',
         'cg',
@@ -93,7 +99,9 @@ def main():
 
     # result = set_solver.fit_v4_nll_sympy_jax(Ks, sheet_keys, slots, booster_spec)
 
-    result = set_solver.fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec)
+    # result = set_solver.fit_v5_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec)
+
+    result = set_solver.fit_v6_nll_sympy_numpy(Ks, sheet_keys, slots, booster_spec, known_p)
 
     print("Parameter Fit Results:")
     pprint(result)
